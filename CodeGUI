@@ -1,0 +1,108 @@
+#pip install twilio flask tkinter
+
+
+
+import tkinter as tk
+from tkinter import messagebox
+from tkinter import ttk
+from twilio.rest import Client
+from flask import Flask, request, Response
+import threading
+import os
+
+# Configuración de Twilio
+ACCOUNT_SID = 'TU_ACCOUNT_SID'
+AUTH_TOKEN = 'TU_AUTH_TOKEN'
+TWILIO_NUMBER = '+1234567890'
+
+client = Client(ACCOUNT_SID, AUTH_TOKEN)
+
+# Aplicación Flask para manejar llamadas entrantes
+app = Flask(__name__)
+
+# Variable global para almacenar el número al que se llamó por última vez
+last_called_number = None
+
+class HoloCallsApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("HoloCalls by Viaja Tech")
+        self.root.geometry("400x300")
+        self.root.resizable(False, False)
+
+        self.create_widgets()
+
+    def create_widgets(self):
+        # Campo para ingresar número telefónico
+        self.number_entry = tk.Entry(self.root, font=('Arial', 14), width=20)
+        self.number_entry.pack(pady=20)
+
+        # Botón para llamar
+        call_button = tk.Button(self.root, text="Llamar", command=self.make_call, font=('Arial', 12))
+        call_button.pack(pady=5)
+
+        # Botón para colgar
+        hangup_button = tk.Button(self.root, text="Colgar", command=self.hangup_call, font=('Arial', 12))
+        hangup_button.pack(pady=5)
+
+        # Botón para remarcar
+        redial_button = tk.Button(self.root, text="Remarcar", command=self.redial_call, font=('Arial', 12))
+        redial_button.pack(pady=5)
+
+        # Lista para historial de llamadas
+        self.call_history = tk.Listbox(self.root, width=50)
+        self.call_history.pack(pady=10)
+
+    def make_call(self):
+        global last_called_number
+        to_number = self.number_entry.get()
+        if not to_number:
+            messagebox.showerror("Error", "Por favor ingresa un número telefónico.")
+            return
+
+        try:
+            call = client.calls.create(
+                to=to_number,
+                from_=TWILIO_NUMBER,
+                url='http://your-ngrok-url.ngrok.io/voice'  # URL para instrucciones de TwiML
+            )
+            last_called_number = to_number
+            self.call_history.insert(tk.END, f"Llamada realizada a {to_number}")
+            messagebox.showinfo("Llamada en curso", f"Llamando a {to_number}...")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo realizar la llamada: {e}")
+
+    def hangup_call(self):
+        # Twilio no permite colgar llamadas desde la API REST después de iniciadas
+        messagebox.showinfo("Colgar", "Para colgar la llamada, finalízala desde tu teléfono.")
+
+    def redial_call(self):
+        if last_called_number:
+            self.number_entry.delete(0, tk.END)
+            self.number_entry.insert(0, last_called_number)
+            self.make_call()
+        else:
+            messagebox.showerror("Error", "No hay número para remarcar.")
+
+# Rutas de Flask
+@app.route("/voice", methods=['GET', 'POST'])
+def voice():
+    from twilio.twiml.voice_response import VoiceResponse
+    resp = VoiceResponse()
+    resp.say("Esta es una llamada de HoloCalls by Viaja Tech.", voice='alice', language='es-MX')
+    return str(resp)
+
+def run_flask_app():
+    app.run(port=5000)
+
+def main():
+    # Iniciar el servidor Flask en un hilo separado
+    threading.Thread(target=run_flask_app).start()
+
+    # Iniciar la interfaz gráfica
+    root = tk.Tk()
+    app_gui = HoloCallsApp(root)
+    root.mainloop()
+
+if __name__ == "__main__":
+    main()
